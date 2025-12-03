@@ -33,6 +33,10 @@ const OrderSchema = new mongoose.Schema(
       enum: ["pending", "confirmed", "cancelled"],
       default: "pending",
     },
+    pay_by: {
+      type: String,
+      default: null,
+    },
     payment_date: { type: Date },
     confirmed_by: String,
     cancelled_by: String,

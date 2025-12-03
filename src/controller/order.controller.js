@@ -123,6 +123,7 @@ const payOrder = async (req, res) => {
 
     order.payment_status = "paid";
     order.payment_date = new Date();
+    order.pay_by = `customer:${req.customer.username}`;
     await order.save();
 
     res.json({
