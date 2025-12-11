@@ -1,13 +1,11 @@
 const Order = require("../models/order.model");
 const OrderItems = require("../models/order_items.model");
 
-// GET all orders for customer
+// ─────────────── GET ALL ORDERS ───────────────
 const GetAll = async (req, res) => {
   try {
     const customer_id = req.customer.customer_id;
-    const orders = await Order.find({ customer_id })
-      .sort({ _id: -1 })
-      .populate("items");
+    const orders = await Order.find({ customer_id }).sort({ _id: -1 });
     res.json({ success: true, orders });
   } catch (err) {
     console.error("GetAll Error:", err);
@@ -15,16 +13,19 @@ const GetAll = async (req, res) => {
   }
 };
 
-// GET order by ID
+// ─────────────── GET ORDER BY ID ───────────────
 const GetById = async (req, res) => {
   try {
     const { order_id } = req.params;
     const customer_id = req.customer.customer_id;
+
     const order = await Order.findOne({ _id: order_id, customer_id }).populate(
       "items"
     );
+
     if (!order)
       return res.status(404).json({ error: "Order not found for this user" });
+
     res.json({ success: true, order });
   } catch (err) {
     console.error("GetById Error:", err);
@@ -32,7 +33,7 @@ const GetById = async (req, res) => {
   }
 };
 
-// CREATE order
+// ─────────────── CREATE ORDER ───────────────
 const create = async (req, res) => {
   try {
     const customer_id = req.customer.customer_id;
@@ -40,19 +41,39 @@ const create = async (req, res) => {
 
     if (!items || items.length === 0)
       return res.status(400).json({ error: "Items are required" });
+
+    // ✅ Validate each item
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      if (
+        !item.product_id ||
+        !item.name ||
+        !item.quantity ||
+        !item.unit_price
+      ) {
+        return res.status(400).json({
+          error: `Item at index ${i} is missing required fields (product_id, name, quantity, unit_price)`,
+        });
+      }
+    }
+
     if (!shipping_address)
       return res.status(400).json({ error: "Shipping address required" });
+
     if (!["delivery", "pickup"].includes(payment_method))
       return res.status(400).json({ error: "Invalid payment method" });
 
+    // Calculate totals
     let total_price = 0;
     let unit_price = 0;
-    let delivery = 2;
+    let delivery = 2; // flat delivery fee per order
     items.forEach((item) => {
-      total_price += item.unit_price * item.quantity + delivery;
+      total_price += item.unit_price * item.quantity;
       unit_price += item.unit_price;
     });
+    total_price += delivery; // add delivery fee
 
+    // Create order
     const order = await Order.create({
       customer_id,
       total_price,
@@ -64,6 +85,7 @@ const create = async (req, res) => {
       payment_date: new Date(),
     });
 
+    // Create order items
     const orderItemsBulk = items.map((item) => ({
       order_id: order._id,
       product_id: item.product_id,
@@ -72,8 +94,10 @@ const create = async (req, res) => {
       unit_price: item.unit_price,
       total_price: item.unit_price * item.quantity,
     }));
+
     const createdItems = await OrderItems.insertMany(orderItemsBulk);
 
+    // Save item IDs in order
     order.items = createdItems.map((i) => i._id);
     await order.save();
 
@@ -84,6 +108,7 @@ const create = async (req, res) => {
         order_id: order._id,
         total_price,
         unit_price,
+        delivery,
         shipping_address,
         payment_method,
         items: createdItems,
@@ -95,30 +120,45 @@ const create = async (req, res) => {
   }
 };
 
-// PAY order (customer)
+// ─────────────── PAY ORDER ───────────────
 const payOrder = async (req, res) => {
   try {
     const { order_id } = req.params;
     const customer_id = req.customer.customer_id;
 
     const order = await Order.findOne({ _id: order_id, customer_id });
-    if (!order) return res.status(404).json({ error: "Order not found" });
-    if (order.payment_status === "paid")
-      return res.status(400).json({ error: "Order already paid" });
+
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        error: "Order not found for this user",
+      });
+    }
+
+    if (order.payment_status === "paid") {
+      return res.status(400).json({
+        success: false,
+        error: "Order already paid",
+      });
+    }
 
     order.payment_status = "paid";
     order.payment_date = new Date();
     order.pay_by = `customer:${req.customer.username}`;
     await order.save();
 
-    res.json({ success: true, message: "Payment successful", order });
+    res.json({
+      success: true,
+      message: "Payment successful",
+      order,
+    });
   } catch (err) {
     console.error("Pay Order Error:", err);
     res.status(500).json({ error: "Internal server error" });
   }
 };
 
-// GET last order
+// ─────────────── GET LAST ORDER ───────────────
 const getLastOrder = async (req, res) => {
   try {
     const customer_id = req.customer.customer_id;
@@ -126,10 +166,12 @@ const getLastOrder = async (req, res) => {
       .sort({ createdAt: -1 })
       .limit(1)
       .populate("items");
+
     if (!order || order.length === 0)
       return res
         .status(404)
         .json({ success: false, message: "No orders found" });
+
     res.json({ success: true, order: order[0] });
   } catch (err) {
     console.error("GetLastOrder Error:", err);
@@ -137,19 +179,23 @@ const getLastOrder = async (req, res) => {
   }
 };
 
-// COMPLETE order
+// ─────────────── MARK ORDER AS COMPLETED ───────────────
 const completeOrder = async (req, res) => {
   try {
     const { order_id } = req.params;
     const customer_id = req.customer.customer_id;
 
     const order = await Order.findOne({ _id: order_id, customer_id });
-    if (!order)
+
+    if (!order) {
       return res.status(404).json({ success: false, error: "Order not found" });
-    if (order.completed)
+    }
+
+    if (order.completed === true) {
       return res
         .status(400)
         .json({ success: false, error: "Order already completed" });
+    }
 
     order.completed = true;
     order.status = "completed";
