@@ -13,22 +13,19 @@ const storage = multer.diskStorage({
       Date.now() + "-" + file.fieldname + path.extname(file.originalname)
     ),
 });
-
 const upload = multer({ storage });
 
-// ─────────────── CUSTOMER ORDERS ───────────────
-router.get("/", authenticateToken, orderController.GetAll); // all orders
-router.get("/last", authenticateToken, orderController.getLastOrder); // last order
-router.get("/:order_id", authenticateToken, orderController.GetById); // single order
+router.get("/", authenticateToken, orderController.GetAll);
+router.get("/last", authenticateToken, orderController.getLastOrder);
+router.get("/:order_id", authenticateToken, orderController.GetById);
 
 router.post(
   "/",
   authenticateToken,
   upload.single("image"),
   orderController.create
-); // create order
-router.post("/pay/:order_id", authenticateToken, orderController.payOrder); // pay order
-
+);
+router.post("/pay/:order_id", authenticateToken, orderController.payOrder);
 router.put(
   "/complete/:order_id",
   authenticateToken,

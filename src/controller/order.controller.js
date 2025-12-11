@@ -1,11 +1,13 @@
 const Order = require("../models/order.model");
 const OrderItems = require("../models/order_items.model");
 
-// ─────────────── GET ALL ORDERS ───────────────
+// GET all orders for customer
 const GetAll = async (req, res) => {
   try {
     const customer_id = req.customer.customer_id;
-    const orders = await Order.find({ customer_id }).sort({ _id: -1 });
+    const orders = await Order.find({ customer_id })
+      .sort({ _id: -1 })
+      .populate("items");
     res.json({ success: true, orders });
   } catch (err) {
     console.error("GetAll Error:", err);
@@ -13,7 +15,7 @@ const GetAll = async (req, res) => {
   }
 };
 
-// ─────────────── GET ORDER BY ID ───────────────
+// GET order by ID
 const GetById = async (req, res) => {
   try {
     const { order_id } = req.params;
@@ -30,7 +32,7 @@ const GetById = async (req, res) => {
   }
 };
 
-// ─────────────── CREATE ORDER ───────────────
+// CREATE order
 const create = async (req, res) => {
   try {
     const customer_id = req.customer.customer_id;
@@ -38,23 +40,19 @@ const create = async (req, res) => {
 
     if (!items || items.length === 0)
       return res.status(400).json({ error: "Items are required" });
-
     if (!shipping_address)
       return res.status(400).json({ error: "Shipping address required" });
-
     if (!["delivery", "pickup"].includes(payment_method))
       return res.status(400).json({ error: "Invalid payment method" });
 
-    // Calculate totals
     let total_price = 0;
     let unit_price = 0;
-    let delivery = 2; // flat delivery fee
+    let delivery = 2;
     items.forEach((item) => {
       total_price += item.unit_price * item.quantity + delivery;
       unit_price += item.unit_price;
     });
 
-    // Create Order
     const order = await Order.create({
       customer_id,
       total_price,
@@ -66,7 +64,6 @@ const create = async (req, res) => {
       payment_date: new Date(),
     });
 
-    // Create Order Items
     const orderItemsBulk = items.map((item) => ({
       order_id: order._id,
       product_id: item.product_id,
@@ -77,7 +74,6 @@ const create = async (req, res) => {
     }));
     const createdItems = await OrderItems.insertMany(orderItemsBulk);
 
-    // Save item IDs in order
     order.items = createdItems.map((i) => i._id);
     await order.save();
 
@@ -99,46 +95,30 @@ const create = async (req, res) => {
   }
 };
 
-// ─────────────── PAY ORDER ───────────────
+// PAY order (customer)
 const payOrder = async (req, res) => {
   try {
     const { order_id } = req.params;
     const customer_id = req.customer.customer_id;
 
-    // ensure user owns the order
     const order = await Order.findOne({ _id: order_id, customer_id });
-
-    if (!order) {
-      return res.status(404).json({
-        success: false,
-        error: "Order not found for this user",
-      });
-    }
-
-    if (order.payment_status === "paid") {
-      return res.status(400).json({
-        success: false,
-        error: "Order already paid",
-      });
-    }
+    if (!order) return res.status(404).json({ error: "Order not found" });
+    if (order.payment_status === "paid")
+      return res.status(400).json({ error: "Order already paid" });
 
     order.payment_status = "paid";
     order.payment_date = new Date();
     order.pay_by = `customer:${req.customer.username}`;
     await order.save();
 
-    res.json({
-      success: true,
-      message: "Payment successful",
-      order,
-    });
+    res.json({ success: true, message: "Payment successful", order });
   } catch (err) {
     console.error("Pay Order Error:", err);
     res.status(500).json({ error: "Internal server error" });
   }
 };
 
-// ─────────────── GET LAST ORDER ───────────────
+// GET last order
 const getLastOrder = async (req, res) => {
   try {
     const customer_id = req.customer.customer_id;
@@ -146,12 +126,10 @@ const getLastOrder = async (req, res) => {
       .sort({ createdAt: -1 })
       .limit(1)
       .populate("items");
-
     if (!order || order.length === 0)
       return res
         .status(404)
         .json({ success: false, message: "No orders found" });
-
     res.json({ success: true, order: order[0] });
   } catch (err) {
     console.error("GetLastOrder Error:", err);
@@ -159,23 +137,19 @@ const getLastOrder = async (req, res) => {
   }
 };
 
-// ─────────────── MARK ORDER AS COMPLETED ───────────────
+// COMPLETE order
 const completeOrder = async (req, res) => {
   try {
     const { order_id } = req.params;
     const customer_id = req.customer.customer_id;
 
     const order = await Order.findOne({ _id: order_id, customer_id });
-
-    if (!order) {
+    if (!order)
       return res.status(404).json({ success: false, error: "Order not found" });
-    }
-
-    if (order.completed === true) {
+    if (order.completed)
       return res
         .status(400)
         .json({ success: false, error: "Order already completed" });
-    }
 
     order.completed = true;
     order.status = "completed";

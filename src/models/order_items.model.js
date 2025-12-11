@@ -3,19 +3,18 @@ const mongoose = require("mongoose");
 const OrderItemsSchema = new mongoose.Schema(
   {
     order_id: {
-      type: String,
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Order",
       required: true,
     },
     product_id: {
       type: String,
       required: true,
     },
-
     name: {
       type: String,
       required: true,
     },
-
     quantity: {
       type: Number,
       required: true,
@@ -29,9 +28,7 @@ const OrderItemsSchema = new mongoose.Schema(
       required: true,
     },
   },
-  {
-    timestamps: { createdAt: "createdAt", updatedAt: "updatedAt" },
-  }
+  { timestamps: true }
 );
 
 module.exports = mongoose.model("OrderItems", OrderItemsSchema);

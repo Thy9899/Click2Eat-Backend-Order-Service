@@ -1,12 +1,11 @@
 const mongoose = require("mongoose");
 const Order = require("../models/order.model");
 
-// GET all orders (admin only)
+// GET all orders (admin)
 const getAllOrders = async (req, res) => {
   try {
-    if (!req.user?.is_admin) {
+    if (!req.user?.is_admin)
       return res.status(403).json({ error: "Access denied" });
-    }
 
     const list = await Order.find().sort({ _id: -1 });
     res.json({ success: true, list });
@@ -16,23 +15,17 @@ const getAllOrders = async (req, res) => {
   }
 };
 
-// 👉 NEW: GET order by ID (admin only)
+// GET order by ID (admin)
 const getOrderById = async (req, res) => {
   try {
     const { id } = req.params;
-
-    if (!req.user?.is_admin) {
+    if (!req.user?.is_admin)
       return res.status(403).json({ error: "Access denied" });
-    }
-
-    if (!mongoose.Types.ObjectId.isValid(id)) {
+    if (!mongoose.Types.ObjectId.isValid(id))
       return res.status(400).json({ error: "Invalid order ID" });
-    }
 
-    const order = await Order.findById(id);
-    if (!order) {
-      return res.status(404).json({ error: "Order not found" });
-    }
+    const order = await Order.findById(id).populate("items");
+    if (!order) return res.status(404).json({ error: "Order not found" });
 
     res.json({ success: true, order });
   } catch (err) {
@@ -45,13 +38,16 @@ const getOrderById = async (req, res) => {
 const confirmOrder = async (req, res) => {
   try {
     const { id } = req.params;
-    if (!mongoose.Types.ObjectId.isValid(id)) {
+    if (!mongoose.Types.ObjectId.isValid(id))
       return res.status(400).json({ error: "Invalid order ID" });
-    }
 
     const order = await Order.findByIdAndUpdate(
       id,
-      { status: "confirmed", by_admin: req.user.username },
+      {
+        status: "confirmed",
+        confirmed_by: req.user.username,
+        deliveryStartTime: new Date(),
+      },
       { new: true }
     );
 
@@ -68,13 +64,12 @@ const confirmOrder = async (req, res) => {
 const cancelOrder = async (req, res) => {
   try {
     const { id } = req.params;
-    if (!mongoose.Types.ObjectId.isValid(id)) {
+    if (!mongoose.Types.ObjectId.isValid(id))
       return res.status(400).json({ error: "Invalid order ID" });
-    }
 
     const order = await Order.findByIdAndUpdate(
       id,
-      { status: "cancelled", by_admin: req.user.username },
+      { status: "cancelled", cancelled_by: req.user.username },
       { new: true }
     );
 
@@ -87,67 +82,27 @@ const cancelOrder = async (req, res) => {
   }
 };
 
-// ─────────────── PAY ORDER ───────────────
+// PAY order (admin)
 const payOrder = async (req, res) => {
   try {
     const { order_id } = req.params;
-
-    // Check if the ID is valid
-    if (!mongoose.Types.ObjectId.isValid(order_id)) {
+    if (!mongoose.Types.ObjectId.isValid(order_id))
       return res.status(400).json({ error: "Invalid order ID" });
-    }
 
-    let query = { _id: order_id };
+    const order = await Order.findById(order_id);
+    if (!order) return res.status(404).json({ error: "Order not found" });
 
-    // If customer making request → limit to their own order
-    if (req.customer) {
-      query.customer_id = req.customer.customer_id;
-    }
+    if (order.payment_status === "paid")
+      return res.status(400).json({ error: "Order already paid" });
 
-    // Admin can pay ANY order → no customer filter
-    // (Admin info is req.user based on your code)
-
-    const order = await Order.findOne(query);
-
-    if (!order) {
-      return res.status(404).json({
-        success: false,
-        error: "Order not found or not allowed to access",
-      });
-    }
-
-    if (order.payment_status === "paid") {
-      return res.status(400).json({
-        success: false,
-        error: "Order already paid",
-      });
-    }
-
-    // Update payment
     order.payment_status = "paid";
     order.payment_date = new Date();
-
-    // Record who paid
-    // if (req.user?.is_admin) {
-    //   order.paid_by_admin = req.user.username;
-    // } else {
-    //   order.paid_by_customer = req.customer.customer_id;
-    // }
-    if (req.user?.is_admin) {
-      order.pay_by = `admin:${req.user.username}`;
-    } else {
-      order.pay_by = `customer:${req.customer.customer_id}`;
-    }
-
+    order.pay_by = `admin:${req.user.username}`;
     await order.save();
 
-    res.json({
-      success: true,
-      message: "Payment successful",
-      order,
-    });
+    res.json({ success: true, message: "Payment successful", order });
   } catch (err) {
-    console.error("Pay Order Error:", err);
+    console.error("payOrder Error:", err);
     res.status(500).json({ error: "Internal server error" });
   }
 };
