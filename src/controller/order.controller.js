@@ -18,14 +18,11 @@ const GetById = async (req, res) => {
   try {
     const { order_id } = req.params;
     const customer_id = req.customer.customer_id;
-
     const order = await Order.findOne({ _id: order_id, customer_id }).populate(
       "items"
     );
-
     if (!order)
       return res.status(404).json({ error: "Order not found for this user" });
-
     res.json({ success: true, order });
   } catch (err) {
     console.error("GetById Error:", err);
@@ -42,21 +39,6 @@ const create = async (req, res) => {
     if (!items || items.length === 0)
       return res.status(400).json({ error: "Items are required" });
 
-    // ✅ Validate each item
-    for (let i = 0; i < items.length; i++) {
-      const item = items[i];
-      if (
-        !item.product_id ||
-        !item.name ||
-        !item.quantity ||
-        !item.unit_price
-      ) {
-        return res.status(400).json({
-          error: `Item at index ${i} is missing required fields (product_id, name, quantity, unit_price)`,
-        });
-      }
-    }
-
     if (!shipping_address)
       return res.status(400).json({ error: "Shipping address required" });
 
@@ -66,14 +48,13 @@ const create = async (req, res) => {
     // Calculate totals
     let total_price = 0;
     let unit_price = 0;
-    let delivery = 2; // flat delivery fee per order
+    let delivery = 2; // flat delivery fee
     items.forEach((item) => {
-      total_price += item.unit_price * item.quantity;
+      total_price += item.unit_price * item.quantity + delivery;
       unit_price += item.unit_price;
     });
-    total_price += delivery; // add delivery fee
 
-    // Create order
+    // Create Order
     const order = await Order.create({
       customer_id,
       total_price,
@@ -85,16 +66,14 @@ const create = async (req, res) => {
       payment_date: new Date(),
     });
 
-    // Create order items
+    // Create Order Items
     const orderItemsBulk = items.map((item) => ({
       order_id: order._id,
       product_id: item.product_id,
-      name: item.name,
       quantity: item.quantity,
       unit_price: item.unit_price,
       total_price: item.unit_price * item.quantity,
     }));
-
     const createdItems = await OrderItems.insertMany(orderItemsBulk);
 
     // Save item IDs in order
@@ -108,7 +87,6 @@ const create = async (req, res) => {
         order_id: order._id,
         total_price,
         unit_price,
-        delivery,
         shipping_address,
         payment_method,
         items: createdItems,
@@ -126,6 +104,7 @@ const payOrder = async (req, res) => {
     const { order_id } = req.params;
     const customer_id = req.customer.customer_id;
 
+    // ensure user owns the order
     const order = await Order.findOne({ _id: order_id, customer_id });
 
     if (!order) {
