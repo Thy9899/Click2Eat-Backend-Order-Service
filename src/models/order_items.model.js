@@ -8,9 +8,14 @@ const OrderItemsSchema = new mongoose.Schema(
     },
     product_id: {
       type: String,
-
       required: true,
     },
+
+    name: {
+      type: String,
+      required: true,
+    },
+
     quantity: {
       type: Number,
       required: true,
@@ -28,4 +33,5 @@ const OrderItemsSchema = new mongoose.Schema(
     timestamps: { createdAt: "createdAt", updatedAt: "updatedAt" },
   }
 );
+
 module.exports = mongoose.model("OrderItems", OrderItemsSchema);

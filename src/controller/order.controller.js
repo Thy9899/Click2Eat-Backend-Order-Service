@@ -70,6 +70,7 @@ const create = async (req, res) => {
     const orderItemsBulk = items.map((item) => ({
       order_id: order._id,
       product_id: item.product_id,
+      name: item.name,
       quantity: item.quantity,
       unit_price: item.unit_price,
       total_price: item.unit_price * item.quantity,
