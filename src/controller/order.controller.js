@@ -159,4 +159,40 @@ const getLastOrder = async (req, res) => {
   }
 };
 
-module.exports = { GetAll, GetById, create, payOrder, getLastOrder };
+// ─────────────── MARK ORDER AS COMPLETED ───────────────
+const completeOrder = async (req, res) => {
+  try {
+    const { order_id } = req.params;
+    const customer_id = req.customer.customer_id;
+
+    const order = await Order.findOne({ _id: order_id, customer_id });
+
+    if (!order) {
+      return res.status(404).json({ success: false, error: "Order not found" });
+    }
+
+    if (order.completed === true) {
+      return res
+        .status(400)
+        .json({ success: false, error: "Order already completed" });
+    }
+
+    order.completed = true;
+    order.status = "completed";
+    await order.save();
+
+    res.json({ success: true, message: "Order marked as completed", order });
+  } catch (err) {
+    console.error("CompleteOrder Error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+};
+
+module.exports = {
+  GetAll,
+  GetById,
+  create,
+  payOrder,
+  getLastOrder,
+  completeOrder,
+};

@@ -29,4 +29,10 @@ router.post(
 ); // create order
 router.post("/pay/:order_id", authenticateToken, orderController.payOrder); // pay order
 
+router.put(
+  "/complete/:order_id",
+  authenticateToken,
+  orderController.completeOrder
+);
+
 module.exports = router;
