@@ -1,5 +1,6 @@
 const mongoose = require("mongoose");
 const Order = require("../models/order.model");
+const Customer = require("../models/customer.model");
 
 /* ============================================================
    GET ALL ORDERS (Admin Only)
@@ -43,11 +44,17 @@ const getOrderById = async (req, res) => {
     if (!mongoose.Types.ObjectId.isValid(id))
       return res.status(400).json({ error: "Invalid order ID" });
 
-    // Fetch order and populate related items
-    const order = await Order.findById(id).populate("items");
+    // Fetch order, populate items AND customer_id
+    const order = await Order.findById(id)
+      .populate("items")
+      .populate("customer_id"); // <--- correct field name
+
     if (!order) return res.status(404).json({ error: "Order not found" });
 
-    res.json({ success: true, order });
+    // Access customer email
+    const customerEmail = order.customer_id?.email || null;
+
+    res.json({ success: true, order, customerEmail });
   } catch (err) {
     console.error("getOrderById Error:", err);
     res.status(500).json({ error: "Internal server error" });
